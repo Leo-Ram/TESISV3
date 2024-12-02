@@ -40,7 +40,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
 
 #define BAL_PIN 33 // encendido balanceo 
 
-const int pin[] = { MXA_PIN, MXB_PIN, MXC_PIN, LED_PIN,OFF_PIN, OVP_PIN, UVP_PIN };
+const int pin[] = { MXA_PIN, MXB_PIN, MXC_PIN, LED_PIN, BAL_PIN, OFF_PIN, OVP_PIN, UVP_PIN };
 INA3221 INA(0x40);
 DHT dht(DHT_PIN, DHT11);
 
@@ -348,7 +348,7 @@ void controlBaterias() {
   // Verificación de temperatura
   bool tempOK = (lec[7] >= conf[7] && lec[7] <= conf[8]); 
   // Si la temperatura está fuera de rango, apagar todo excepto en emergencia
-  if (!tempOK && !boton[3]) {
+  if (!tempOK) {
     apagarTodo();
     return;
   }
@@ -361,19 +361,19 @@ void controlBaterias() {
   if (boton[0]) {
     controlCarga();
   } else {
-    analogWrite(OVP_PIN, 255);  // Apagar carga
+    analogWrite(OVP_PIN, 0);  // Apagar carga
   }
   // Control de descarga
   if (boton[1]) {
     controlDescarga();
   } else {
-    analogWrite(UVP_PIN, 255);  // Apagar descarga
+    analogWrite(UVP_PIN, 0);  // Apagar descarga
   }
   // Control de balance
   if (boton[2]) {
     controlBalance();
   } else {
-    //apagarBalance();
+    digitalWrite(BAL_PIN, LOW);
   }
 }
 
@@ -391,7 +391,7 @@ void controlCarga() {
   }
   static bool cargaActiva = false;
   if (algunaAlta) {
-    analogWrite(OVP_PIN, 255);  // Apagar carga
+    analogWrite(OVP_PIN, 0);  // Apagar carga
     cargaActiva = false;
   } else if (todasBajasOVPR && !cargaActiva) {
     cargaActiva = true;
@@ -403,17 +403,17 @@ void controlCarga() {
 
 
 void ajustarCorrienteCarga() {
-  static uint8_t valorPWM = 0;
+  static uint8_t valorPWM = 255;
   if (abs(lec[6] - conf[5]) < 100) {
     return;  // Si estamos cerca del objetivo, no ajustar
   }
 
   // Ajuste rápido de corriente
   if (lec[6] > conf[5]) {
-      valorPWM = min(255, valorPWM + 50);
+      valorPWM = max(0, valorPWM - 50);
       analogWrite(OVP_PIN, valorPWM);  
   } else {
-    valorPWM = max(0, valorPWM - 5);
+    valorPWM = min(255, valorPWM + 5);
   }
   
   analogWrite(OVP_PIN, valorPWM);
@@ -436,7 +436,7 @@ void controlDescarga() {
   static bool descargaActiva = false;
   
   if (algunaBaja) {
-    analogWrite(UVP_PIN, 255);  // Apagar carga
+    analogWrite(UVP_PIN, 0);  // Apagar carga
     descargaActiva = false;
   } else if (todasBajasUVPR && !descargaActiva) {
     descargaActiva = true;
@@ -448,7 +448,7 @@ void controlDescarga() {
 }
 
 void ajustarCorrienteDesarga() {
-  static uint8_t valorPWMd = 0;
+  static uint8_t valorPWMd = 255;
   float corrienteActual = abs(lec[6]);  // Valor absoluto de la corriente
   float corrienteObjetivo = conf[6];  // DCP
 
@@ -457,27 +457,42 @@ void ajustarCorrienteDesarga() {
   }
 
   if (corrienteActual > corrienteObjetivo) {
-    valorPWMd = min(255, valorPWMd + 50);
+    valorPWMd = max(0, valorPWMd - 50);
   } else {
-    valorPWMd = max(0, valorPWMd - 5);
+    valorPWMd = min(255, valorPWMd + 5);
   }
   
   analogWrite(UVP_PIN, valorPWMd);
 }
 
 void controlBalance() {
-
+  bool balance = false;
+  for (int i = 0; i < 6; i++) {
+    if ((abs(bat[0]-bat[i])) > conf[4]) {  // BAL
+      balance = true;
+      //Serial.println("entro balance: "); 
+      break;
+    }
+  }
+  if (balance) {
+    digitalWrite(BAL_PIN, HIGH);
+   // Serial.println("balance on");
+  } else {
+    digitalWrite(BAL_PIN, LOW);
+    //Serial.println("balance off");
+  }
 }
 
 void modoEmergencia() {
-  analogWrite(OVP_PIN, 255);  // Apagar carga
-  controlDescarga();  // Permitir descarga
+  analogWrite(OVP_PIN, 0);  // Apagar carga
+  analogWrite(UVP_PIN, 255);  // Permite descarga sin limite
+  //controlDescarga();  // Permitir descarga
 }
 
 void apagarTodo() {
-  analogWrite(OVP_PIN, 255);
-  analogWrite(UVP_PIN, 255);
-  //apagarBalance();
+  analogWrite(OVP_PIN, 0);
+  analogWrite(UVP_PIN, 0);
+  digitalWrite(BAL_PIN, 0);
 }
 
 
@@ -628,7 +643,7 @@ void initsd() {
 }
 
 void initpin() {
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 5; i++) {
     pinMode(pin[i], OUTPUT);
     digitalWrite(pin[i], 0);
   }
