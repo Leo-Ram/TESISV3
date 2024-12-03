@@ -62,6 +62,7 @@ int dd = 255;
 bool bancc = false;
 bool bandd = false;
 const int ch = 3;
+String  ipS = "";
 
 
 unsigned long ti;     // tiempo inicial
@@ -266,8 +267,7 @@ void lecturas() {
     } else{
     docLec[key] = bat[i];}
   }
-  float voltageTotal = analogRead(ANGT_PIN);
-  docLec["Total"] = voltageTotal/g[7];
+  docLec["Total"] = lec[8];
   docLec["Current"] = lec[6];
   docLec["Temperature"] = lec[7];
 
@@ -320,7 +320,36 @@ void leer() {
   for (int i = 0; i < 6; i++) {
     bat[i] = lec[i] + g[6];
   }
+  lec[8] = analogRead(ANGT_PIN);
+  lec[8] = lec[8]/g[7];
   escribirsd();
+  dispPrint();
+}
+
+void dispPrint(){
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+      // Mostrar los valores del vector lecv en la primera fila
+    for (int i = 0; i < 3; i++) {
+      display.setCursor(i * 40, 0); // Colocar el texto (división de 128px en 3 columnas)
+      display.print(bat[i]);
+    }
+
+    // Mostrar los valores del vector lecc en la segunda fila
+    for (int i = 0; i < 3; i++) {
+      display.setCursor(i * 40, 10); // Fila inferior (y = 16 para la segunda fila)
+      display.print(bat[i+3]);
+    }
+    display.setCursor(0, 20);
+    display.print((int)lec[6]);
+    display.setCursor(60, 20);
+    display.print((int)lec[8]);
+   // display.setCursor(0, 30);
+   // display.print(ipS);
+    // Actualizar la pantalla con los valores
+    display.display();
+
 }
 
 
@@ -344,7 +373,7 @@ void controlApagado() {
 
 void controlBaterias() {
 
-  //controlApagado();
+  controlApagado();
   // Verificación de temperatura
   bool tempOK = (lec[7] >= conf[7] && lec[7] <= conf[8]); 
   // Si la temperatura está fuera de rango, apagar todo excepto en emergencia
@@ -401,22 +430,38 @@ void controlCarga() {
   }
 }
 
-
 void ajustarCorrienteCarga() {
-  static uint8_t valorPWM = 255;
-  if (abs(lec[6] - conf[5]) < 100) {
+  if (abs(lec[6] + conf[5]) < 100) {
     return;  // Si estamos cerca del objetivo, no ajustar
   }
-
-  // Ajuste rápido de corriente
-  if (lec[6] > conf[5]) {
-      valorPWM = max(0, valorPWM - 50);
-      analogWrite(OVP_PIN, valorPWM);  
-  } else {
-    valorPWM = min(255, valorPWM + 5);
+  if ((lec[6] > -conf[5]) && (cc >= 254)) {
+    analogWrite(OVP_PIN, 255);
+    return; 
   }
-  
-  analogWrite(OVP_PIN, valorPWM);
+  do {
+    analogWrite(OVP_PIN, cc);
+    vTaskDelay(pdMS_TO_TICKS(5));
+    lec[6] = INA.getCurrent_mA(1);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0); // Colocar el texto (división de 128px en 3 columnas)
+    display.print(lec[6]);
+    display.setCursor(0, 20);
+    display.print(cc);
+    display.setCursor(60, 0);
+    display.print(conf[5]);
+    display.display();
+    if (lec[6] < -conf[5] ) {
+      cc = max(0, cc - 1);
+    }else {
+      cc = min(255, cc + 1);
+      if (cc >= 254) {
+        analogWrite(OVP_PIN, 255);
+        return;
+      }
+    }
+  }while (abs(lec[6] + conf[5]) > 100);
 }
 
 void controlDescarga() {
@@ -448,6 +493,40 @@ void controlDescarga() {
 }
 
 void ajustarCorrienteDesarga() {
+  if (abs(lec[6] - conf[6]) < 100) {
+    return;  // Si estamos cerca del objetivo, no ajustar
+  }
+  if ((lec[6] < conf[6]) && (dd >= 254)) {
+    analogWrite(UVP_PIN, 255);
+    return; 
+  }
+  do {
+    analogWrite(UVP_PIN, dd);
+    vTaskDelay(pdMS_TO_TICKS(5));
+    lec[6] = INA.getCurrent_mA(1);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0); // Colocar el texto (división de 128px en 3 columnas)
+    display.print(lec[6]);
+    display.setCursor(0, 20);
+    display.print(dd);
+    display.setCursor(60, 0);
+    display.print(conf[6]);
+    display.display();
+    if (lec[6] > conf[6] ) {
+      dd = max(0, dd - 1);
+    }else {
+      dd = min(255, dd + 1);
+      if (dd >= 254) {
+        analogWrite(UVP_PIN, 255);
+        return;
+      }
+    }
+  }while (abs(lec[6] - conf[6]) > 100);
+}
+/*
+void ajustarCorrienteDesarga() {
   static uint8_t valorPWMd = 255;
   float corrienteActual = abs(lec[6]);  // Valor absoluto de la corriente
   float corrienteObjetivo = conf[6];  // DCP
@@ -464,6 +543,7 @@ void ajustarCorrienteDesarga() {
   
   analogWrite(UVP_PIN, valorPWMd);
 }
+*/
 
 void controlBalance() {
   bool balance = false;
@@ -509,7 +589,7 @@ void escribirsd() {
   File dataFile = SD.open("/datos.txt", FILE_WRITE);
   if (dataFile) {
     dataFile.seek(dataFile.size());
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 9; i++) {
       if (i < 6) {
         dataFile.print(bat[i]);
         dataFile.print(",");
@@ -518,8 +598,6 @@ void escribirsd() {
         dataFile.print(",");
       }
     }
-    dataFile.print(lec[5]);
-    dataFile.print(",");
     dataFile.print(timeinfo);
     dataFile.println();
     dataFile.close();
@@ -605,6 +683,7 @@ void wifi1() {
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+  ipS = WiFi.localIP().toString();
   dns1();
 }
 
