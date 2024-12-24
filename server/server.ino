@@ -52,7 +52,7 @@ TaskHandle_t Task2;
 SemaphoreHandle_t mutex;
 
 float bat[6] = { 3.7, 3.8, 3.9, 4.0, 4.1, 4.2 };
-float lec[9] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 23.4, 699, 20 };
+float lec[9] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 599, 28, 24 };
 float g[10] = {};
 float conf[10] = {};
 float absolut[6] = {};
@@ -63,6 +63,7 @@ bool bancc = false;
 bool bandd = false;
 const int ch = 3;
 String  ipS = "";
+const int margen = 300;
 
 
 unsigned long ti;     // tiempo inicial
@@ -132,7 +133,7 @@ void actualVariable() {
   conf[1] = doc["OVPR"] | 4.0f;   // over voltage protection recovery
   conf[2] = doc["UVP"] | 3.0f;    //under voltage protection
   conf[3] = doc["UVPR"] | 3.4f;   // under voltage protection recovery
-  conf[4] = doc["VBal"] | 4.15f;  //voltage balancing
+  conf[4] = doc["VBal"] | 0.1f;  //voltage balancing
   conf[5] = doc["CCP"] | 1500.0f; //maximum charging current
   conf[6] = doc["DCP"] | 1500.0f; //maximum discharging current
   conf[7] = doc["TMin"] | 4.0f;   //minimum temperature
@@ -141,7 +142,7 @@ void actualVariable() {
   
   // Valores absolut[]
   absolut[0] = doc["VMax"] | 4.2f;
-  absolut[1] = doc["VMin"] | 2.6f;
+  absolut[1] = doc["VMin"] | 2.8f;
   absolut[2] = doc["IMax"] | 1500.0f;
   absolut[3] = doc["ACap"] | 1800.0f;
   absolut[4] = doc["MBal"] | 1.0f;
@@ -431,7 +432,7 @@ void controlCarga() {
 }
 
 void ajustarCorrienteCarga() {
-  if (abs(lec[6] + conf[5]) < 100) {
+  if (abs(lec[6] + conf[5]) < margen) {
     return;  // Si estamos cerca del objetivo, no ajustar
   }
   if ((lec[6] > -conf[5]) && (cc >= 254)) {
@@ -461,7 +462,7 @@ void ajustarCorrienteCarga() {
         return;
       }
     }
-  }while (abs(lec[6] + conf[5]) > 100);
+  }while (abs(lec[6] + conf[5]) > margen);
 }
 
 void controlDescarga() {
@@ -493,7 +494,7 @@ void controlDescarga() {
 }
 
 void ajustarCorrienteDesarga() {
-  if (abs(lec[6] - conf[6]) < 100) {
+  if (abs(lec[6] - conf[6]) < margen) {
     return;  // Si estamos cerca del objetivo, no ajustar
   }
   if ((lec[6] < conf[6]) && (dd >= 254)) {
@@ -523,7 +524,7 @@ void ajustarCorrienteDesarga() {
         return;
       }
     }
-  }while (abs(lec[6] - conf[6]) > 100);
+  }while (abs(lec[6] - conf[6]) > margen);
 }
 /*
 void ajustarCorrienteDesarga() {
@@ -706,7 +707,7 @@ void initina() {
     c++;
   }
   INA.setShuntR(0, 0.100);
-  INA.setShuntR(1, 0.100);
+  INA.setShuntR(1, 0.033);
   INA.setShuntR(2, 0.100);
   Serial.println("INA3221 iniciado");
 }
