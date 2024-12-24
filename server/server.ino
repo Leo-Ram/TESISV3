@@ -13,7 +13,7 @@
 #include <Adafruit_SSD1306.h> // screen
 // Definir las dimensiones de la pantalla
 #define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 32
+#define SCREEN_HEIGHT 64
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
 
@@ -59,11 +59,11 @@ float absolut[6] = {};
 bool boton[4] = {};
 int cc = 255;
 int dd = 255;
-bool bancc = false;
-bool bandd = false;
+
 const int ch = 3;
 String  ipS = "";
 const int margen = 300;
+const int margenM = 150;
 
 
 unsigned long ti;     // tiempo inicial
@@ -331,24 +331,21 @@ void dispPrint(){
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
-      // Mostrar los valores del vector lecv en la primera fila
+    display.setCursor(0, 0);
+    display.print(ipS);
     for (int i = 0; i < 3; i++) {
-      display.setCursor(i * 40, 0); // Colocar el texto (división de 128px en 3 columnas)
+      display.setCursor(i * 40, 16); // Colocar el texto (división de 128px en 3 columnas)
       display.print(bat[i]);
     }
 
-    // Mostrar los valores del vector lecc en la segunda fila
     for (int i = 0; i < 3; i++) {
-      display.setCursor(i * 40, 10); // Fila inferior (y = 16 para la segunda fila)
+      display.setCursor(i * 40, 32); // Fila inferior (y = 16 para la segunda fila)
       display.print(bat[i+3]);
     }
-    display.setCursor(0, 20);
+    display.setCursor(0, 48);
     display.print((int)lec[6]);
-    display.setCursor(60, 20);
+    display.setCursor(60, 48);
     display.print((int)lec[8]);
-   // display.setCursor(0, 30);
-   // display.print(ipS);
-    // Actualizar la pantalla con los valores
     display.display();
 
 }
@@ -356,233 +353,124 @@ void dispPrint(){
 
 //----------------------------------------------------------------contro 0
 
-void controlApagado() {
-  bool swOff = false;
-  for (int i = 0; i < 6; i++) {
-    if (bat[i] < absolut[1]) {  // minimo
-      swOff = true;
-    }
-  }
-
-  if ((g[9] > 1) || swOff) {
-    digitalWrite(OFF_PIN, LOW);
-  }else {
-    digitalWrite(OFF_PIN, HIGH);
-  }
-
+void apagarSalidas(){
+  analogWrite(OVP_PIN,0);
+  analogWrite(UVP_PIN,0);
+  digitalWrite(BAL_PIN, LOW);
 }
 
-void controlBaterias() {
-
-  controlApagado();
-  // Verificación de temperatura
-  bool tempOK = (lec[7] >= conf[7] && lec[7] <= conf[8]); 
-  // Si la temperatura está fuera de rango, apagar todo excepto en emergencia
-  if (!tempOK) {
-    apagarTodo();
+void control(){
+  if ((lec[7] < conf[7]) || (lec[7] > conf[8])){ // temperatura
+    Serial.println("temperatura inadecuada");
+    apagarSalidas();
     return;
   }
-  // Control de emergencia
-  if (boton[3]) {
-    modoEmergencia();
+  if (boton[3]) {  //modo emergencia
+    analogWrite(OVP_PIN,0);
+    analogWrite(UVP_PIN,255);
+    digitalWrite(BAL_PIN, HIGH);
     return;
   }
-  // Control de carga
-  if (boton[0]) {
-    controlCarga();
-  } else {
-    analogWrite(OVP_PIN, 0);  // Apagar carga
+  bool estado [5] = {true, true, true, true, false}; // need carga cargar descarga balance
+  for (int i = 0; i < 6; i++){
+    float aux = bat[i];
+    estado[0] &=  aux < conf[0];
+    estado[1] &= aux < conf[1];
+    estado[2] &= aux > conf[2];
+    estado[3] &= aux > conf[3];
+    if ((abs(bat[0] - aux)) > conf[4] ) {
+      estado[4] = true;
+    }
+    if(aux < absolut[1]){
+      digitalWrite(OFF_PIN, LOW);
+    }
   }
-  // Control de descarga
-  if (boton[1]) {
-    controlDescarga();
-  } else {
-    analogWrite(UVP_PIN, 0);  // Apagar descarga
+  if (boton[0] && estado[0]) { // carga
+    if(estado[1]){
+      ajusteCarga();
+      //Serial.println("ajusteCarga");
+    }
+  }else {
+    analogWrite(OVP_PIN, 0);
+    //Serial.println("apagaCarga");
   }
-  // Control de balance
-  if (boton[2]) {
-    controlBalance();
-  } else {
+  if(boton[1] && estado[2]){
+    if(estado[3]){
+      ajusteDescarga();
+      //Serial.println("ajusteDescarga");
+    }
+  }else {
+    analogWrite(UVP_PIN, 0);
+   // Serial.println("apagaDesarga");
+  }
+  if (boton[2] && estado[4]){
+    digitalWrite(BAL_PIN, HIGH);
+  }else{
     digitalWrite(BAL_PIN, LOW);
   }
 }
+void ajusteCarga(){
+  //Serial.println(cc);
+  analogWrite(OVP_PIN, cc);
+  vTaskDelay(pdMS_TO_TICKS(5));
+  lec[6] = INA.getCurrent_mA(1);
 
-void controlCarga() {
-  bool todasBajasOVPR = true;
-  bool algunaAlta = false;
-  for (int i = 0; i < 6; i++) {
-    if (bat[i] >= conf[0]) {  // OVP
-      algunaAlta = true;
-      break;
-    }
-    if (bat[i] > conf[1]) {  // OVPR
-      todasBajasOVPR = false;
-    }
+  if (-lec[6] > (conf[5] + margen) ){
+    cc = 0;
+    analogWrite(OVP_PIN, cc);
+    //Serial.println("Apagon_Carga");
   }
-  static bool cargaActiva = false;
-  if (algunaAlta) {
-    analogWrite(OVP_PIN, 0);  // Apagar carga
-    cargaActiva = false;
-  } else if (todasBajasOVPR && !cargaActiva) {
-    cargaActiva = true;
-  }
-  if (cargaActiva) {
-    ajustarCorrienteCarga();
-  }
-}
-
-void ajustarCorrienteCarga() {
-  if (abs(lec[6] + conf[5]) < margen) {
-    return;  // Si estamos cerca del objetivo, no ajustar
-  }
-  if ((lec[6] > -conf[5]) && (cc >= 254)) {
-    analogWrite(OVP_PIN, 255);
-    return; 
-  }
-  do {
+  while ((-lec[6] < (conf[5]-margenM)) && (cc < 255)){
+    cc = min(255, cc + 1);
+    //Serial.println(cc);
     analogWrite(OVP_PIN, cc);
     vTaskDelay(pdMS_TO_TICKS(5));
     lec[6] = INA.getCurrent_mA(1);
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0, 0); // Colocar el texto (división de 128px en 3 columnas)
+    display.setCursor(0, 0); 
     display.print(lec[6]);
     display.setCursor(0, 20);
     display.print(cc);
     display.setCursor(60, 0);
     display.print(conf[5]);
     display.display();
-    if (lec[6] < -conf[5] ) {
-      cc = max(0, cc - 1);
-    }else {
-      cc = min(255, cc + 1);
-      if (cc >= 254) {
-        analogWrite(OVP_PIN, 255);
-        return;
-      }
-    }
-  }while (abs(lec[6] + conf[5]) > margen);
-}
-
-void controlDescarga() {
-  bool todasBajasUVPR = true;
-  bool algunaBaja = false;
-  
-  for (int i = 0; i < 6; i++) {
-    if (bat[i] <= conf[2]) {  // UVP
-      algunaBaja = true;
-      break;
-    }
-    if (bat[i] < conf[3]) {  // UVPR
-      todasBajasUVPR = false;
-    }
-  }
-
-  static bool descargaActiva = false;
-  
-  if (algunaBaja) {
-    analogWrite(UVP_PIN, 0);  // Apagar carga
-    descargaActiva = false;
-  } else if (todasBajasUVPR && !descargaActiva) {
-    descargaActiva = true;
-  }
-
-  if (descargaActiva) {
-    ajustarCorrienteDesarga();
   }
 }
+void ajusteDescarga(){
+  //Serial.println(dd);
+  analogWrite(UVP_PIN, dd);
+  vTaskDelay(pdMS_TO_TICKS(5));
+  lec[6] = INA.getCurrent_mA(1);
 
-void ajustarCorrienteDesarga() {
-  if (abs(lec[6] - conf[6]) < margen) {
-    return;  // Si estamos cerca del objetivo, no ajustar
+  if (lec[6] > (conf[6] + margen) ){
+    dd = 0;
+    analogWrite(OVP_PIN, dd);
+    //Serial.println("Apagon_Descarga");
   }
-  if ((lec[6] < conf[6]) && (dd >= 254)) {
-    analogWrite(UVP_PIN, 255);
-    return; 
-  }
-  do {
+  while ((lec[6] < (conf[6]-margenM)) && (dd < 255)){
+    dd = min(255, dd + 1);
+    //Serial.println(dd);
     analogWrite(UVP_PIN, dd);
     vTaskDelay(pdMS_TO_TICKS(5));
     lec[6] = INA.getCurrent_mA(1);
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0, 0); // Colocar el texto (división de 128px en 3 columnas)
+    display.setCursor(0, 0); 
     display.print(lec[6]);
     display.setCursor(0, 20);
     display.print(dd);
     display.setCursor(60, 0);
     display.print(conf[6]);
     display.display();
-    if (lec[6] > conf[6] ) {
-      dd = max(0, dd - 1);
-    }else {
-      dd = min(255, dd + 1);
-      if (dd >= 254) {
-        analogWrite(UVP_PIN, 255);
-        return;
-      }
-    }
-  }while (abs(lec[6] - conf[6]) > margen);
-}
-/*
-void ajustarCorrienteDesarga() {
-  static uint8_t valorPWMd = 255;
-  float corrienteActual = abs(lec[6]);  // Valor absoluto de la corriente
-  float corrienteObjetivo = conf[6];  // DCP
-
-  if (abs(corrienteActual - corrienteObjetivo) < 100) {
-    return;
-  }
-
-  if (corrienteActual > corrienteObjetivo) {
-    valorPWMd = max(0, valorPWMd - 50);
-  } else {
-    valorPWMd = min(255, valorPWMd + 5);
-  }
-  
-  analogWrite(UVP_PIN, valorPWMd);
-}
-*/
-
-void controlBalance() {
-  bool balance = false;
-  for (int i = 0; i < 6; i++) {
-    if ((abs(bat[0]-bat[i])) > conf[4]) {  // BAL
-      balance = true;
-      //Serial.println("entro balance: "); 
-      break;
-    }
-  }
-  if (balance) {
-    digitalWrite(BAL_PIN, HIGH);
-   // Serial.println("balance on");
-  } else {
-    digitalWrite(BAL_PIN, LOW);
-    //Serial.println("balance off");
   }
 }
 
-void modoEmergencia() {
-  analogWrite(OVP_PIN, 0);  // Apagar carga
-  analogWrite(UVP_PIN, 255);  // Permite descarga sin limite
-  //controlDescarga();  // Permitir descarga
-}
-
-void apagarTodo() {
-  analogWrite(OVP_PIN, 0);
-  analogWrite(UVP_PIN, 0);
-  digitalWrite(BAL_PIN, 0);
-}
+//---------------------------------------------------------------- contro fin 0
 
 
-
-//----------------------------------------------------------------control
-
-
-
-//----------------------------------------------------------------contron ends
 
 void escribirsd() {
   ta = tp + ((millis() - ti) / 1000);
@@ -649,7 +537,7 @@ void Task1code(void* pvParameters) {
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(500));
     // Ejecutar control()
     if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE) {
-      controlBaterias();
+      control();
       //Serial.println("control");
       xSemaphoreGive(mutex);
     }
