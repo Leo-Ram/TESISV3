@@ -387,7 +387,9 @@ void control(){
   }
   if (boton[0] && estado[0]) { // carga
     if(estado[1]){
-      ajusteCarga();
+      if (abs(lec[6] + conf[5]) > margen){
+        ajusteCarga();
+      }
       //Serial.println("ajusteCarga");
     }
   }else {
@@ -396,8 +398,10 @@ void control(){
   }
   if(boton[1] && estado[2]){
     if(estado[3]){
-      ajusteDescarga();
-      //Serial.println("ajusteDescarga");
+      if (abs(lec[6] - conf[6]) > margen){
+        ajusteDescarga();
+      }
+         //Serial.println("ajusteDescarga");
     }
   }else {
     analogWrite(UVP_PIN, 0);
@@ -595,7 +599,7 @@ void initina() {
     c++;
   }
   INA.setShuntR(0, 0.100);
-  INA.setShuntR(1, 0.033);
+  INA.setShuntR(1, 0.015);
   INA.setShuntR(2, 0.100);
   Serial.println("INA3221 iniciado");
 }

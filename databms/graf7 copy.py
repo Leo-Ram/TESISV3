@@ -9,7 +9,7 @@ os.system('cls' if os.name == 'nt' else 'clear')
 direccion = "databms/datos2p"
 
 df = pd.read_csv(direccion+".csv")
-df = df[df['I'] > -200]
+#df = df[df['I'] > -200]
 print(df.head(10))
 
 
@@ -68,10 +68,9 @@ def plot_variables_and_power(df, start_time, end_time):
 
 
 # Definir el intervalo de tiempo (ajusta estos valores según tus necesidades)
-# '2024-01-01 01:32:00' inicio descarga '2024-01-01 07:55:00'
-# 04:06:00' inicio descarga  18:40:00   14:30Horas 
+
 start_time = pd.to_datetime('2024-01-01 00:00:00')
-end_time = pd.to_datetime('2024-01-01 19:06:00')
+end_time = pd.to_datetime('2024-01-01 03:06:00')
 
 # Llamar a la función para crear los gráficos
 plot_variables_and_power(df, start_time, end_time)
