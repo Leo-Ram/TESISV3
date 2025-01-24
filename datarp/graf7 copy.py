@@ -6,7 +6,7 @@ import matplotlib.dates as mdates
 from pandas import json_normalize
 os.system('cls' if os.name == 'nt' else 'clear')  
 
-direccion = "datarp/lecturas2p"
+direccion = "datarp/20-01-2025p"
 
 df = pd.read_csv(direccion+".csv")
 

@@ -6,9 +6,9 @@ import matplotlib.dates as mdates
 from pandas import json_normalize
 os.system('cls' if os.name == 'nt' else 'clear')  
 
-direccion = "datarp/lecturas2"
+direccion = "datarp/20-01-2025"
 
-nameColumn = ["IMPPT", "IL", "IBAT", "VT", "TIME"]
+nameColumn = ["IL", "IBAT", "IMPPT", "VT", "TIME"]
 df = pd.read_csv(direccion+".txt",delimiter=',',names=nameColumn)
 
 
@@ -16,7 +16,7 @@ df = pd.read_csv(direccion+".txt",delimiter=',',names=nameColumn)
 df['TIME'] = pd.to_datetime(df['TIME'])
 
 #df["IBAT"] = - df['IBAT']
-df["IMPPT"] = - df['IMPPT']
+#df["IMPPT"] = - df['IMPPT']
 
 df["PMPPT"] = df['IMPPT'] * df['VT']/1000
 df["PL"] = df["IL"] * df ["VT"]/1000

@@ -62,8 +62,8 @@ int dd = 255;
 
 const int ch = 3;
 String  ipS = "";
-const int margen = 300;
-const int margenM = 150;
+const int margen = 500;
+const int margenM = 250;
 
 
 unsigned long ti;     // tiempo inicial
@@ -378,7 +378,7 @@ void control(){
     estado[1] &= aux < conf[1];
     estado[2] &= aux > conf[2];
     estado[3] &= aux > conf[3];
-    if ((abs(bat[0] - aux)) > conf[4] ) {
+    if ((abs(bat[5] - aux)) > conf[4] ) {
       estado[4] = true;
     }
     if(aux < absolut[1]){
